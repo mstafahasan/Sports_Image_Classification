@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sports Classifier</title>
+  <style>
+    /* Reset & base */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      background: #f4f7fc;
+      color: #333;
+      line-height: 1.6;
+      padding: 2em;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1em;
+      color: #2c3e50;
+    }
+
+    /* File input + button */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1em;
+      margin-bottom: 1.5em;
+    }
+    input[type="file"] {
+      padding: .5em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+    }
+    button {
+      padding: .6em 1.2em;
+      background: #3498db;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button:disabled { background: #95a5a6; cursor: default; }
+    button:hover:not(:disabled) { background: #2980b9; }
+
+    /* Preview + results grid */
+    .grid {
+      display: grid;
+      /* shrink min column width to 100px so more cards fit */
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 0.8em;
+    }
+    .grid img {
+      max-width: 100%;
+      max-height: 80px;      /* limit height */
+      object-fit: cover;     /* crop if needed */
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      display: block;
+      margin: 0 auto;
+    }
+
+    /* Card for result */
+    .result {
+      background: white;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: .5em;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    }
+    .result strong {
+      display: block;
+      margin-top: .5em;
+      color: #2c3e50;
+    }
+
+    /* Status message */
+    #status {
+      text-align: center;
+      margin-bottom: 1em;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sports Image Classifier</h1>
+
+  <div class="controls">
+    <input id="files" type="file" accept="image/*" multiple>
+    <button id="btn">Predict</button>
+  </div>
+
+  <div id="status"></div>
+
+  <div id="preview" class="grid"></div>
+  <div id="results" class="grid"></div>
+
+  <script>
+    const inp    = document.getElementById('files'),
+          prev   = document.getElementById('preview'),
+          res    = document.getElementById('results'),
+          status = document.getElementById('status'),
+          btn    = document.getElementById('btn');
+
+    inp.onchange = () => {
+      prev.innerHTML = '';
+      res.innerHTML  = '';
+      status.textContent = '';
+      for (let f of inp.files) {
+        let img = new Image();
+        img.src = URL.createObjectURL(f);
+        prev.appendChild(img);
+      }
+    };
+
+    btn.onclick = async () => {
+      if (!inp.files.length) {
+        alert('Please select one or more images.');
+        return;
+      }
+      btn.disabled = true;
+      status.textContent = 'Uploading & predicting…';
+      res.innerHTML = '';
+
+      const fd = new FormData();
+      for (let f of inp.files) fd.append('images', f);
+
+      try {
+        const r    = await fetch('/predict', { method:'POST', body:fd });
+        const text = await r.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = null; }
+
+        if (!r.ok) {
+          status.textContent = 'Error during prediction';
+          res.innerHTML = data
+            ? `<pre style="color:red">${JSON.stringify(data, null, 2)}</pre>`
+            : `<pre style="color:red">${text}</pre>`;
+        } else {
+          status.textContent = 'Prediction results:';
+          data.predictions.forEach((lab, i) => {
+            const card = document.createElement('div');
+            card.className = 'result';
+            card.innerHTML = `
+              <img src="${URL.createObjectURL(inp.files[i])}">
+              <strong>${lab}</strong>
+            `;
+            res.appendChild(card);
+          });
+        }
+      } catch (e) {
+        status.textContent = 'Network error';
+        res.innerHTML = `<pre style="color:red">${e.message}</pre>`;
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
